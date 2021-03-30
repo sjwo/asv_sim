@@ -26,7 +26,9 @@ class Generator():
 
         :param filename: for file containing control inputs
         """
+        pass
 
+    def next_control(self)
 # TODO create my own callback function
 # TODO import rospy.Timer
 """
@@ -39,6 +41,11 @@ I probably want to create my own object that eats an input file of commands,
 and then steps through them each time its callback is passed.
 
 I'll need to capture the data somehow, too..maybe I'll be subscribing to topics? So, there's no ROS node running...I think I'll actually just be checking the state of the Dynamics object, and recording that.
+
+TODO:
+turn all errors, disturbances, current to zero
+
+
 """
 
 def main():
