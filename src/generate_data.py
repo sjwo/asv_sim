@@ -10,11 +10,12 @@ Spring 2021
 Generates simulated ASV (CW4) data for use with UNH CS 850 S21 ML Project
 re forward model of boat.
 
-Python 3, please.
+Python 2, please (just because I'm working on machine with Melodic ROS, which uses Python 2).
 """
 
 from asv_sim.dynamics import Dynamics
 from asv_sim.cw4 import cw4
+import rospy
 
 class Generator():
     def __init__(self):
@@ -28,7 +29,8 @@ class Generator():
         """
         pass
 
-    def next_control(self)
+    def next_control(self):
+        pass
 # TODO create my own callback function
 # TODO import rospy.Timer
 """
@@ -45,7 +47,7 @@ I'll need to capture the data somehow, too..maybe I'll be subscribing to topics?
 TODO:
 turn all errors, disturbances, current to zero
 
-
+QUESTION: at what frequency do I need to send the constant (repeated) control? Is that 10 Hz? Maybe just parameterize?
 """
 
 def main():
