@@ -34,18 +34,22 @@ class Generator():
         :param filename: for file containing control inputs
         """
         with open(filename, 'r') as control:
-            period = rospy.Duration(int(control.readline().strip()))
-            step = rospy.Duration(int(control.readline().strip()))
+            period = rospy.Duration.from_sec(float(control.readline().strip()))
+            # convert input milliseconds to Duration nanoseconds
+            step = rospy.Duration(nsecs=int(control.readline().strip()) * 1000000)
+            self.debug("period: {}, step: {}".format(period.to_sec(), step.to_sec()), 3)
             assert(step < period)
             time = rospy.Time()
             checkpoint = time + period
             for line in control:
-                self.debug("new control {} at {} with checkpoint {}".format(line.strip(), time, checkpoint))
+                self.debug("new control {} at {} with checkpoint {}".format(line.strip(), time.to_sec(), checkpoint.to_sec()))
                 while time < checkpoint:
                     (throttle, rudder) = line.strip().split()
-                    self.debug("  {} {} @ {}".format(throttle, rudder, time))
+                    throttle = float(throttle)
+                    rudder = float(rudder)
+                    self.debug("  {} {} @ {}".format(throttle, rudder, time.to_sec()), level=2)
                     self.boat.update(throttle, rudder, time)
-                    time += rospy.Duration(nsecs=step)
+                    time += step
                 checkpoint += period
 
 """
