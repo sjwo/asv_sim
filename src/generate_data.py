@@ -19,9 +19,14 @@ from asv_sim.cw4 import cw4
 import rospy
 
 class Generator():
-    def __init__(self, verbosity=0):
-        self.boat = Dynamics(cw4)
+    def __init__(self, verbosity=0, no_jitter=False):
         self.verbosity = verbosity
+        self.boat = Dynamics(cw4)
+        if no_jitter:
+            self.debug("Setting zero jitter")
+            for key in self.boat.jitters.keys():
+                self.boat.jitters[key] = 0.0
+        self.data = list()
 
     def debug(self, msg=str, level=1):
         if level <= self.verbosity:
@@ -48,9 +53,14 @@ class Generator():
                     throttle = float(throttle)
                     rudder = float(rudder)
                     self.debug("  {} {} @ {}".format(throttle, rudder, time.to_sec()), level=2)
-                    self.boat.update(throttle, rudder, time)
+                    diagnostics = self.boat.update(throttle, rudder, time)
+                    self.data.append(diagnostics)
                     time += step
                 checkpoint += period
+
+    def print_data(self):
+        for step in self.data:
+            print(step)
 
 """
 basically, I'll start a Timer, pass it my own callback.
@@ -73,9 +83,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("control_filename", type=str)
     parser.add_argument('--verbose', '-v', action="count")
+    parser.add_argument('--no_jitter', default=False, action="store_true")
     args = parser.parse_args()
-    gen = Generator(args.verbose)
+    gen = Generator(verbosity=args.verbose, no_jitter=args.no_jitter)
     gen.generate(args.control_filename)
+    gen.print_data()
 
 if __name__ == '__main__':
     main()
