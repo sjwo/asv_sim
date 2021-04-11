@@ -8,6 +8,8 @@ Valid rudder ranges: -1.0 to 1.0
 
 Valid throttle ranges: 0.0 to 1.0
 
+Generator makes boat warm up to full 3200 rpm, which takes 3.3 seconds. Recommended to issue full throttle of 1 for each control line in order to maintain constant velocity.
+
     [period]
     [step]
     [[throttle] [rudder]]

@@ -27,10 +27,24 @@ class Generator():
             for key in self.boat.jitters.keys():
                 self.boat.jitters[key] = 0.0
         self.data = list()
+        self.diagnostics = list()
 
     def debug(self, msg=str, level=1):
         if level <= self.verbosity:
             print("DEBUG: " + msg) 
+
+    def do_warm_up(self, step=rospy.Duration):
+        """Gets ASV to steady state. To be used before submitting controls from input file.
+
+        returns time at end of warmup
+
+        cw4 takes 1 second to increase 1000 RPM; max RPM is 3200; start rpm is 0."""
+        time = rospy.Time()
+        warmup_checkpoint = time + rospy.Duration.from_sec(3.3)
+        while time < warmup_checkpoint:
+            self.boat.update(1.0, 0.0, time)
+            time += step
+        return time
 
     def generate(self, filename):
         """
@@ -44,8 +58,12 @@ class Generator():
             step = rospy.Duration(nsecs=int(control.readline().strip()) * 1000000)
             self.debug("period: {}, step: {}".format(period.to_sec(), step.to_sec()), 3)
             assert(step < period)
-            time = rospy.Time()
+
+            # warm up asv to steady state
+            time = self.do_warm_up(step)
             checkpoint = time + period
+
+            # collect data using controls from input file
             for line in control:
                 self.debug("new control {} at {} with checkpoint {}".format(line.strip(), time.to_sec(), checkpoint.to_sec()))
                 while time < checkpoint:
@@ -54,13 +72,34 @@ class Generator():
                     rudder = float(rudder)
                     self.debug("  {} {} @ {}".format(throttle, rudder, time.to_sec()), level=2)
                     diagnostics = self.boat.update(throttle, rudder, time)
-                    self.data.append(diagnostics)
+                    self.data.append(
+                        {
+                            'time': time.to_sec(),
+                            'throttle': throttle,
+                            'rudder': rudder,
+                            'speed': self.boat.speed,
+                            'lat': self.boat.latitude,
+                            'lon': self.boat.longitude,
+                            'heading': self.boat.heading,
+                            'cog': self.boat.cog,
+                            'sog': self.boat.sog,
+                        }
+                    )
+                    self.diagnostics.append(diagnostics)
                     time += step
                 checkpoint += period
 
     def print_data(self):
-        for step in self.data:
-            print(step)
+        for observation in self.data:
+            print(observation)
+
+    def print_diagnostics(self):
+        for step in self.diagnostics:
+            print("throttle: {}, rpm: {}, prop_rpm: {},".format(
+                step['throttle'],
+                step['rpm'],
+                step['prop_rpm']
+                ))
 
 """
 basically, I'll start a Timer, pass it my own callback.
@@ -88,6 +127,7 @@ def main():
     gen = Generator(verbosity=args.verbose, no_jitter=args.no_jitter)
     gen.generate(args.control_filename)
     gen.print_data()
+    gen.print_diagnostics()
 
 if __name__ == '__main__':
     main()
