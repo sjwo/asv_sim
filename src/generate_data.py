@@ -10,16 +10,22 @@ Spring 2021
 Generates simulated ASV (CW4) data for use with UNH CS 850 S21 ML Project
 re forward model of boat.
 
-Python 2, please (just because I'm working on machine with Melodic ROS, which uses Python 2).
+Python 2, please (just because I'm working on machine with Melodic ROS, which uses Python 2 so the rospy import assumes Python 2).
 """
 
+import argparse
 from asv_sim.dynamics import Dynamics
 from asv_sim.cw4 import cw4
 import rospy
 
 class Generator():
-    def __init__(self):
+    def __init__(self, verbosity=0):
         self.boat = Dynamics(cw4)
+        self.verbosity = verbosity
+
+    def debug(self, msg=str, level=1):
+        if level <= self.verbosity:
+            print("DEBUG: " + msg) 
 
     def generate(self, filename):
         """
@@ -27,12 +33,21 @@ class Generator():
 
         :param filename: for file containing control inputs
         """
-        pass
+        with open(filename, 'r') as control:
+            period = rospy.Duration(int(control.readline().strip()))
+            step = rospy.Duration(int(control.readline().strip()))
+            assert(step < period)
+            time = rospy.Time()
+            checkpoint = time + period
+            for line in control:
+                self.debug("new control {} at {} with checkpoint {}".format(line.strip(), time, checkpoint))
+                while time < checkpoint:
+                    (throttle, rudder) = line.strip().split()
+                    self.debug("  {} {} @ {}".format(throttle, rudder, time))
+                    self.boat.update(throttle, rudder, time)
+                    time += rospy.Duration(nsecs=step)
+                checkpoint += period
 
-    def next_control(self):
-        pass
-# TODO create my own callback function
-# TODO import rospy.Timer
 """
 basically, I'll start a Timer, pass it my own callback.
 
@@ -51,8 +66,12 @@ QUESTION: at what frequency do I need to send the constant (repeated) control? I
 """
 
 def main():
-    print("Hello, world!")
-    pass
+    parser = argparse.ArgumentParser()
+    parser.add_argument("control_filename", type=str)
+    parser.add_argument('--verbose', '-v', action="count")
+    args = parser.parse_args()
+    gen = Generator(args.verbose)
+    gen.generate(args.control_filename)
 
 if __name__ == '__main__':
     main()
