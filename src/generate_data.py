@@ -26,71 +26,89 @@ class Generator():
             self.debug("Setting zero jitter")
             for key in self.boat.jitters.keys():
                 self.boat.jitters[key] = 0.0
-        self.data = list()
+        self.raw_data = list()
         self.diagnostics = list()
 
     def debug(self, msg=str, level=1):
         if level <= self.verbosity:
             print("DEBUG: " + msg) 
 
-    def do_warm_up(self, step=rospy.Duration):
+    def do_warm_up(self):
         """Gets ASV to steady state. To be used before submitting controls from input file.
+
+        MUST BE CALLED AFTER self.step IS SET.
 
         returns time at end of warmup
 
         cw4 takes 1 second to increase 1000 RPM; max RPM is 3200; start rpm is 0."""
+        assert(self.step)
         time = rospy.Time()
         warmup_checkpoint = time + rospy.Duration.from_sec(3.3)
         while time < warmup_checkpoint:
             self.boat.update(1.0, 0.0, time)
-            time += step
+            time += self.step
         return time
 
-    def generate(self, filename):
+    def generate(self, filename, repetitions=1):
         """
         Reads control file, runs simulation accordingly, and returns data.
 
         :param filename: for file containing control inputs
         """
         with open(filename, 'r') as control:
-            period = rospy.Duration.from_sec(float(control.readline().strip()))
+            self.period = rospy.Duration.from_sec(float(control.readline().strip()))
             # convert input milliseconds to Duration nanoseconds
-            step = rospy.Duration(nsecs=int(control.readline().strip()) * 1000000)
-            self.debug("period: {}, step: {}".format(period.to_sec(), step.to_sec()), 3)
-            assert(step < period)
+            self.step = rospy.Duration(nsecs=int(control.readline().strip()) * 1000000)
+            self.debug("self.period: {}, self.step: {}".format(self.period.to_sec(), self.step.to_sec()), 3)
+            assert(self.step < self.period)
 
             # warm up asv to steady state
-            time = self.do_warm_up(step)
-            checkpoint = time + period
+            time = self.do_warm_up()
+            checkpoint = time + self.period
 
             # collect data using controls from input file
             for line in control:
                 self.debug("new control {} at {} with checkpoint {}".format(line.strip(), time.to_sec(), checkpoint.to_sec()))
-                while time < checkpoint:
-                    (throttle, rudder) = line.strip().split()
-                    throttle = float(throttle)
-                    rudder = float(rudder)
-                    self.debug("  {} {} @ {}".format(throttle, rudder, time.to_sec()), level=2)
-                    diagnostics = self.boat.update(throttle, rudder, time)
-                    self.data.append(
-                        {
-                            'time': time.to_sec(),
-                            'throttle': throttle,
-                            'rudder': rudder,
-                            'speed': self.boat.speed,
-                            'lat': self.boat.latitude,
-                            'lon': self.boat.longitude,
-                            'heading': self.boat.heading,
-                            'cog': self.boat.cog,
-                            'sog': self.boat.sog,
-                        }
-                    )
-                    self.diagnostics.append(diagnostics)
-                    time += step
-                checkpoint += period
+                for _rep in range(repetitions):
+                    while time < checkpoint:
+                        (throttle, rudder) = line.strip().split()
+                        throttle = float(throttle)
+                        rudder = float(rudder)
+                        self.debug("  {} {} @ {}".format(throttle, rudder, time.to_sec()), level=2)
+                        diagnostics = self.boat.update(throttle, rudder, time)
+                        self.raw_data.append(
+                            {
+                                'time': time.to_sec(),
+                                'throttle': throttle,
+                                'rudder': rudder,
+                                'speed': self.boat.speed,
+                                'lat': self.boat.latitude,
+                                'lon': self.boat.longitude,
+                                'heading': self.boat.heading,
+                                'cog': self.boat.cog,
+                                'sog': self.boat.sog,
+                            }
+                        )
+                        self.diagnostics.append(diagnostics)
+                        time += self.step
+                    checkpoint += self.period
 
-    def print_data(self):
-        for observation in self.data:
+    def convert_to_observations(self):
+        """
+        MUST BE CALLED AFTER generate()
+        """
+        n_steps_per_observation = int(self.period.to_sec() / self.step.to_sec())
+        data_ix = 0
+        print(len(self.raw_data))
+        while data_ix < len(self.raw_data):
+            start = self.raw_data[data_ix]
+            end = self.raw_data[data_ix + n_steps_per_observation - 1]
+            print("{} start: \n{}".format(data_ix, start))
+            print("{} end: \n{}".format(data_ix, end))
+            data_ix += n_steps_per_observation
+
+    def print_raw_data(self):
+        for observation in self.raw_data:
             print(observation)
 
     def print_diagnostics(self):
@@ -123,11 +141,14 @@ def main():
     parser.add_argument("control_filename", type=str)
     parser.add_argument('--verbose', '-v', action="count")
     parser.add_argument('--no_jitter', default=False, action="store_true")
+    parser.add_argument('--repetitions', type=int, default=1, help='number of periods to repeat each control before executing next control')
     args = parser.parse_args()
     gen = Generator(verbosity=args.verbose, no_jitter=args.no_jitter)
-    gen.generate(args.control_filename)
-    gen.print_data()
-    gen.print_diagnostics()
+    gen.generate(args.control_filename, repetitions=args.repetitions)
+    gen.print_raw_data()
+    # gen.print_diagnostics()
+    gen.convert_to_observations()
+
 
 if __name__ == '__main__':
     main()
