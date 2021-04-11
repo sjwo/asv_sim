@@ -14,6 +14,7 @@ Python 2, please (just because I'm working on machine with Melodic ROS, which us
 """
 
 import argparse
+from math import sin, cos
 from asv_sim.dynamics import Dynamics
 from asv_sim.cw4 import cw4
 import rospy
@@ -28,6 +29,7 @@ class Generator():
                 self.boat.jitters[key] = 0.0
         self.raw_data = list()
         self.diagnostics = list()
+        self.observations = list()
 
     def debug(self, msg=str, level=1):
         if level <= self.verbosity:
@@ -93,23 +95,50 @@ class Generator():
                         time += self.step
                     checkpoint += self.period
 
+    @staticmethod
+    def raw_to_obs_helper(start, end):
+        """start and end are each a datapoint (element) from the self.raw_data list of dictionaries
+        """
+        hypoteneuse = (((end['lat'] - start['lat']) ** 2) + (end['lon'] - start['lon']) ** 2) ** 0.5
+        # print(type(hypoteneuse))
+
+        # TODO figure out units
+        
+        # calculated offsets
+        # TODO probably need some modulo in here or something?
+        yaw = end['heading'] - start['heading'] 
+        surge = hypoteneuse * cos(yaw)
+        swap = hypoteneuse * sin(yaw)
+        return (surge, swap, yaw)
+
     def convert_to_observations(self):
         """
         MUST BE CALLED AFTER generate()
         """
         n_steps_per_observation = int(self.period.to_sec() / self.step.to_sec())
         data_ix = 0
-        print(len(self.raw_data))
+        # print(len(self.raw_data))
         while data_ix < len(self.raw_data):
             start = self.raw_data[data_ix]
             end = self.raw_data[data_ix + n_steps_per_observation - 1]
-            print("{} start: \n{}".format(data_ix, start))
-            print("{} end: \n{}".format(data_ix, end))
+            self.debug("{} start: \n{}".format(data_ix, start), level=3)
+            self.debug("{} end: \n{}".format(data_ix, end), level=3)
             data_ix += n_steps_per_observation
+            surge, sway, yaw = self.raw_to_obs_helper(start, end)
+            self.observations.append(
+                {
+                    'throttle': start['throttle'],
+                    'rudder': start['rudder'],
+                    'surge': surge,
+                    'sway': sway,
+                    'yaw': yaw
+                }
+            )
+
 
     def print_raw_data(self):
-        for observation in self.raw_data:
-            print(observation)
+        for data_point in self.raw_data:
+            print(data_point)
 
     def print_diagnostics(self):
         for step in self.diagnostics:
@@ -119,22 +148,17 @@ class Generator():
                 step['prop_rpm']
                 ))
 
-"""
-basically, I'll start a Timer, pass it my own callback.
-
-my own callback will grab the TimerEvent instance that it's passed,
-will extract the time and pass that to Dynamics.update() and pass the next set of controls.
-
-I probably want to create my own object that eats an input file of commands,
-and then steps through them each time its callback is passed.
-
-I'll need to capture the data somehow, too..maybe I'll be subscribing to topics? So, there's no ROS node running...I think I'll actually just be checking the state of the Dynamics object, and recording that.
-
-TODO:
-turn all errors, disturbances, current to zero
-
-QUESTION: at what frequency do I need to send the constant (repeated) control? Is that 10 Hz? Maybe just parameterize?
-"""
+    def print_observations(self):
+        # TODO after figuring out units in raw_to_obs_helper, figure out how I want to print them here.
+        print("throttle, rudder, surge, sway, yaw")
+        for obs in self.observations:
+            print("{} {} {} {} {}".format(
+                obs['throttle'],
+                obs['rudder'],
+                obs['surge'],
+                obs['sway'],
+                obs['yaw'],
+            ))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -148,6 +172,7 @@ def main():
     gen.print_raw_data()
     # gen.print_diagnostics()
     gen.convert_to_observations()
+    gen.print_observations()
 
 
 if __name__ == '__main__':
