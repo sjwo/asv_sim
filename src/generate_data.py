@@ -103,6 +103,8 @@ class Generator():
         # print(type(hypoteneuse))
 
         # TODO figure out units
+        # Maybe convert to meters. That might be nice.
+        # What to use for Delta Theta?
         
         # calculated offsets
         # TODO probably need some modulo in here or something?
@@ -164,13 +166,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("control_filename", type=str)
     parser.add_argument('--verbose', '-v', action="count")
-    parser.add_argument('--no_jitter', default=False, action="store_true")
+    parser.add_argument('--no-jitter', default=False, action="store_true")
     parser.add_argument('--repetitions', type=int, default=1, help='number of periods to repeat each control before executing next control')
     args = parser.parse_args()
     gen = Generator(verbosity=args.verbose, no_jitter=args.no_jitter)
     gen.generate(args.control_filename, repetitions=args.repetitions)
-    gen.print_raw_data()
-    # gen.print_diagnostics()
+    if args.verbose > 1:
+        gen.print_raw_data()
+        if args.verbose > 2:
+            gen.print_diagnostics()
     gen.convert_to_observations()
     gen.print_observations()
 

@@ -18,4 +18,10 @@ Generator makes boat warm up to full 3200 rpm, which takes 3.3 seconds. Recommen
     [[throttle] [rudder]]
     [[throttle] [rudder]]
     [[throttle] [rudder]]
-    ...    
+    ...
+
+## Usage
+
+Example:
+
+     python generate_data.py port-center-starboard.control --repetitions 20 --no-jitter
