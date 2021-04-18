@@ -154,7 +154,7 @@ class Generator():
         # TODO after figuring out units in raw_to_obs_helper, figure out how I want to print them here.
         print("throttle, rudder, surge, sway, yaw")
         for obs in self.observations:
-            print("{} {} {} {} {}".format(
+            print("{}, {}, {}, {}, {}".format(
                 obs['throttle'],
                 obs['rudder'],
                 obs['surge'],
