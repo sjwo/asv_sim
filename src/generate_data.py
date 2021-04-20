@@ -14,10 +14,12 @@ Python 2, please (just because I'm working on machine with Melodic ROS, which us
 """
 
 import argparse
+import rospy
 from math import sin, cos
 from asv_sim.dynamics import Dynamics
 from asv_sim.cw4 import cw4
-import rospy
+from asv_sim import geodesic
+
 
 class Generator():
     def __init__(self, verbosity=0, no_jitter=False):
@@ -99,7 +101,12 @@ class Generator():
     def raw_to_obs_helper(start, end):
         """start and end are each a datapoint (element) from the self.raw_data list of dictionaries
         """
-        hypoteneuse = (((end['lat'] - start['lat']) ** 2) + (end['lon'] - start['lon']) ** 2) ** 0.5
+        azimuth, hypoteneuse = geodesic.inverse(
+            start['lon'],
+            start['lat'],
+            end['lon'],
+            end['lat'],
+        )
         # print(type(hypoteneuse))
 
         # TODO figure out units
@@ -108,10 +115,14 @@ class Generator():
         
         # calculated offsets
         # TODO probably need some modulo in here or something?
+        # TODO angle passed to cos/sin is incorrect:
+        #   must incorporate both previous heading and calculated
+        #   azimuth in order to calculate relative surge and sway
+        #   between old and new positions.
         yaw = end['heading'] - start['heading'] 
         surge = hypoteneuse * cos(yaw)
-        swap = hypoteneuse * sin(yaw)
-        return (surge, swap, yaw)
+        sway = hypoteneuse * sin(yaw)
+        return (surge, sway, yaw)
 
     def convert_to_observations(self):
         """
