@@ -15,7 +15,7 @@ Python 2, please (just because I'm working on machine with Melodic ROS, which us
 
 import argparse
 import rospy
-from math import sin, cos
+from math import sin, cos, pi
 from asv_sim.dynamics import Dynamics
 from asv_sim.cw4 import cw4
 from asv_sim import geodesic
@@ -98,30 +98,55 @@ class Generator():
                     checkpoint += self.period
 
     @staticmethod
-    def raw_to_obs_helper(start, end):
-        """start and end are each a datapoint (element) from the self.raw_data list of dictionaries
+    def modrad(theta):
+        sign = 1
+        if theta < 0:
+            sign = -1
+            theta *= sign
+        theta = theta % (2 * pi)
+        return theta * sign
+
+    @staticmethod
+    def calc_heading_to_azimuth(heading, azimuth):
+        """Finds difference in radians between arguments.
+
+        Arguments are in (nonnegative?) radians clockwise from north.
+
+        Returns difference in range [-pi, pi].
         """
-        azimuth, hypoteneuse = geodesic.inverse(
+        # modulo 2pi
+        heading = Generator.modrad(heading)
+        azimuth = Generator.modrad(azimuth)
+
+        # find difference
+        theta = azimuth - heading
+
+        # find equivalent difference that is less that pi
+        if theta < -pi:
+            theta_norm = 2 * pi + theta
+        elif theta > pi:
+            theta_norm = 2 * pi - theta
+        else:
+            theta_norm = theta
+        return theta_norm
+
+    @staticmethod
+    def raw_to_obs_helper(start, end):
+        """start and end are each a datapoint (element) from the self.raw_data list of (...tuples of?...) dictionaries
+        """
+        azimuth, distance = geodesic.inverse(
             start['lon'],
             start['lat'],
             end['lon'],
             end['lat'],
         )
-        # print(type(hypoteneuse))
 
-        # TODO figure out units
-        # Maybe convert to meters. That might be nice.
-        # What to use for Delta Theta?
-        
-        # calculated offsets
-        # TODO probably need some modulo in here or something?
-        # TODO angle passed to cos/sin is incorrect:
-        #   must incorporate both previous heading and calculated
-        #   azimuth in order to calculate relative surge and sway
-        #   between old and new positions.
+        # TODO double check this. Do I need to modulo or normalize?
         yaw = end['heading'] - start['heading'] 
-        surge = hypoteneuse * cos(yaw)
-        sway = hypoteneuse * sin(yaw)
+
+        theta = Generator.calc_heading_to_azimuth(start['heading'], azimuth)
+        surge = distance * cos(theta)
+        sway = distance * sin(theta)
         return (surge, sway, yaw)
 
     def convert_to_observations(self):
@@ -147,7 +172,6 @@ class Generator():
                     'yaw': yaw
                 }
             )
-
 
     def print_raw_data(self):
         for data_point in self.raw_data:
@@ -189,6 +213,54 @@ def main():
     gen.convert_to_observations()
     gen.print_observations()
 
+def p(factor):
+    return factor * pi
+
+def f(theta):
+    return theta / pi
+
+def modrad(theta):
+    sign = 1
+    if theta < 0:
+        sign = -1
+        theta *= sign
+    theta = theta % (2 * pi)
+    return theta * sign
+
+def test():
+    g = Generator()
+    for heading_f, azimuth_f in [
+            (0, 0.25),
+            (0.25, 0),
+            (1.6, 0.4),
+            (1.4, 0.6),
+            (0.0, 0.0),
+            (2, 0),
+            (0, 2),
+            (2.1, 0.2),
+            (0.2, 2.1),
+        ]:
+        heading = p(heading_f)
+        azimuth = p(azimuth_f)
+
+        # modulo 2pi
+        heading = modrad(heading)
+        azimuth = modrad(azimuth)
+
+        # find difference
+        theta = azimuth - heading
+
+        # find equivalent difference that is less that pi
+        if theta < -pi:
+            theta_norm = 2 * pi + theta
+        elif theta > pi:
+            theta_norm = 2 * pi - theta
+        else:
+            theta_norm = theta
+        print("heading: {}, azimuth: {}, theta: {}, theta_norm: {}".format(
+            f(heading), f(azimuth), f(theta), f(theta_norm)
+            ))
 
 if __name__ == '__main__':
     main()
+    # test()
